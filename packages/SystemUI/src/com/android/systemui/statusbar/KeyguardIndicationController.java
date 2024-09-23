@@ -248,6 +248,8 @@ public class KeyguardIndicationController {
     private IBatteryPropertiesRegistrar mBatteryPropertiesRegistrar;
     private boolean mAlternateFastchargeInfoUpdate;
 
+    private View mTransparentView;
+
     private KeyguardUpdateMonitorCallback mUpdateMonitorCallback;
 
     private boolean mDozing;
@@ -471,6 +473,7 @@ public class KeyguardIndicationController {
                 mKeyguardLogger,
                 mFeatureFlags
         );
+        mTransparentView = indicationArea.findViewById(R.id.transparent_keyguard_view);
         updateDeviceEntryIndication(false /* animate */);
         updateOrganizedOwnedDevice();
         if (mBroadcastReceiver == null) {
@@ -1130,6 +1133,10 @@ public class KeyguardIndicationController {
 
         // A few places might need to hide the indication, so always start by making it visible
         mIndicationArea.setVisibility(VISIBLE);
+            // Walk down a precedence-ordered list of what indication
+            // should be shown based on user or device state
+            // AoD
+            mTransparentView.setVisibility(View.GONE);
 
         // Walk down a precedence-ordered list of what indication
         // should be shown based on device state
@@ -1211,6 +1218,7 @@ public class KeyguardIndicationController {
                 setWakelock = false;
             }
 
+<<<<<<< HEAD
             if (!TextUtils.equals(mTopIndicationView.getText(), newIndication)) {
                 if (setWakelock) {
                     mWakeLock.setAcquired(true);
@@ -1232,6 +1240,123 @@ public class KeyguardIndicationController {
                                                 ? mContext.getColor(R.color.misalignment_text_color)
                                                 : Color.WHITE))
                                 .build(), animate, null /* onAnimationEndCallback */);
+=======
+            // A few places might need to hide the indication, so always start by making it visible
+            mIndicationArea.setVisibility(VISIBLE);
+
+            // Walk down a precedence-ordered list of what indication
+            // should be shown based on device state
+            if (mDozing) {
+                boolean useMisalignmentColor = false;
+                mLockScreenIndicationView.setVisibility(View.GONE);
+                mTopIndicationView.setVisibility(VISIBLE);
+                mTopIndicationView.setTextColor(Color.WHITE);
+                CharSequence newIndication = "";
+                boolean setWakelock = false;
+
+                if (!TextUtils.isEmpty(mBiometricMessage)) {
+                    newIndication = mBiometricMessage; // note: doesn't show mBiometricMessageFollowUp
+                    setWakelock = true;
+                } else if (!TextUtils.isEmpty(mTransientIndication)) {
+                    newIndication = mTransientIndication;
+                    setWakelock = true;
+                } else if (!mBatteryPresent) {
+                    // If there is no battery detected, hide the indication and bail
+                    mIndicationArea.setVisibility(GONE);
+                    setWakelock = false;
+                    return;
+                } else if (!TextUtils.isEmpty(mAlignmentIndication)) {
+                    useMisalignmentColor = true;
+                    newIndication = mAlignmentIndication;
+                    mTopIndicationView.setTextColor(mContext.getColor(R.color.misalignment_text_color));
+                    setWakelock = false;
+                } else if (mPowerPluggedIn || mEnableBatteryDefender) {
+                    newIndication = computePowerIndication();
+                    if (showBatteryBar || showBatteryBarAlways) {
+                        mBatteryBar.setVisibility(View.VISIBLE);
+                        mBatteryBar.setBatteryPercent(mBatteryLevel);
+                        if (ambientShowSettingsIcon()) {
+                            mTransparentView.setVisibility(View.VISIBLE);
+                        } else {
+                            mTransparentView.setVisibility(View.GONE);
+                        }
+                        if (batteryBarSource == 2) {
+                            mBatteryBar.setBarColor(batteryBarColor);
+                        } else if (batteryBarSource == 1) {
+                            mBatteryBar.setBarColor(mContext.getColor(R.color.ambient_batterybar_color));
+                        } else {
+                            mBatteryBar.setBarColor(Color.WHITE);
+                        }
+                    }
+                    setWakelock = animate;
+                } else {
+                    String batteryLevel = NumberFormat.getPercentInstance().format(mBatteryLevel / 100f);
+                    String batteryTemp = com.android.internal.util.voltage.VoltageUtils.batteryTemperature(mContext, false);
+                    String cpuTemp = com.android.internal.util.voltage.VoltageUtils.getCPUTemp(mContext);
+
+                    Drawable batteryIcon = mContext.getDrawable(R.drawable.ic_ambient_battery);
+                    Drawable cpuIcon = mContext.getDrawable(R.drawable.ic_ambient_cpu);
+                    Drawable temperatureIcon = mContext.getDrawable(R.drawable.ic_ambient_temperature);
+
+                    if (batteryIcon != null) {
+                        batteryIcon.setBounds(0, 0, batteryIcon.getIntrinsicWidth(), batteryIcon.getIntrinsicHeight());
+                    }
+
+                    if (cpuIcon != null) {
+                        cpuIcon.setBounds(0, 0, cpuIcon.getIntrinsicWidth(), cpuIcon.getIntrinsicHeight());
+                    }
+
+                    if (temperatureIcon != null) {
+                        temperatureIcon.setBounds(0, 0, temperatureIcon.getIntrinsicWidth(), temperatureIcon.getIntrinsicHeight());
+                    }
+
+                    SpannableStringBuilder indicationBuilder = new SpannableStringBuilder();
+
+                    switch (getAmbientShowSettings()) {
+                        case 1: // Show battery level
+                            appendIcons(indicationBuilder, batteryLevel, batteryIcon, ambientShowSettingsIcon());
+                            newIndication = indicationBuilder;
+                            break;
+
+                        case 2: // Battery level & battery temperature
+                            appendIcons(indicationBuilder, batteryLevel, batteryIcon, ambientShowSettingsIcon());
+                            appendWithSeparator(indicationBuilder, " | ");
+                            appendIcons(indicationBuilder, batteryTemp, temperatureIcon, ambientShowSettingsIcon());
+                            newIndication = indicationBuilder;
+                            break;
+
+                        case 3: // Battery level, battery temperature & CPU temperature
+                            appendIcons(indicationBuilder, batteryLevel, batteryIcon, ambientShowSettingsIcon());
+                            appendWithSeparator(indicationBuilder, " | ");
+                            appendIcons(indicationBuilder, batteryTemp, temperatureIcon, ambientShowSettingsIcon());
+                            appendWithSeparator(indicationBuilder, " | ");
+                            appendIcons(indicationBuilder, cpuTemp, cpuIcon, ambientShowSettingsIcon());
+                            newIndication = indicationBuilder;
+                            break;
+
+                        case 0: // Hidden
+                        default:
+                            newIndication = "";
+                            break;
+                    }
+                    if (showBatteryBarAlways) {
+                        mBatteryBar.setVisibility(View.VISIBLE);
+                        mBatteryBar.setBatteryPercent(mBatteryLevel);
+                        if (ambientShowSettingsIcon()) {
+                            mTransparentView.setVisibility(View.VISIBLE);
+                        } else {
+                            mTransparentView.setVisibility(View.GONE);
+                        }
+                        if (batteryBarSource == 2) {
+                            mBatteryBar.setBarColor(batteryBarColor);
+                        } else if (batteryBarSource == 1) {
+                            mBatteryBar.setBarColor(mContext.getColor(R.color.ambient_batterybar_color));
+                        } else {
+                            mBatteryBar.setBarColor(Color.WHITE);
+                        }
+                    }
+                    setWakelock = false;
+>>>>>>> 4261170ec234 (SystemUI: Add a gap between ambient icons & battery bar)
                 }
             }
             return;
